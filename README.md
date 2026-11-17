@@ -1,6 +1,6 @@
-# TP 11 - Reemplazo Completo de Reservas desde la Web (MongoDB + Express + EJS)
+# TP 12 - Cambio Parcial y Eliminación de Reservas (MongoDB + Express + EJS)
 
-Aplicación web con vistas EJS y API REST para la gestión de reservas de salas de estudio, incorporando la edición por reemplazo completo desde formulario HTML (`GET` y `POST /reservas/:id/editar`) reutilizando la lógica de servicio compartida con `PUT /api/reservas/:id`.
+Aplicación web con vistas EJS y API REST para la gestión de reservas de salas de estudio, incorporando pantallas específicas para el **cambio parcial de estado** (`GET` y `POST /reservas/:id/estado`) y la **eliminación con confirmación** (`GET` y `POST /reservas/:id/eliminar`), reutilizando los servicios compartidos con `PATCH` y `DELETE` de la API y conservando intacta la edición completa de 7 campos del TP 11.
 
 ## 1. Instalación y Ejecución
 
@@ -8,7 +8,7 @@ Aplicación web con vistas EJS y API REST para la gestión de reservas de salas 
    ```bash
    npm ci
    ```
-2. Copiar `.env.example` a `.env` y completar la cadena de conexión a MongoDB Atlas apuntando a la base `reservas_salas_u11`.
+2. Copiar `.env.example` a `.env` y completar la URI de MongoDB Atlas apuntando a la base `reservas_salas_u12` (colección `reservas`).
 3. Verificar formato, linting y conexión a la base antes de iniciar:
    ```bash
    npm run check
@@ -21,67 +21,52 @@ Aplicación web con vistas EJS y API REST para la gestión de reservas de salas 
 
 ## 2. Variables de Entorno (`.env.example`)
 
-El proyecto requiere las siguientes variables en `.env` (sin incluir credenciales reales en el repositorio):
-
 ```env
 PORT=3000
-MONGODB_URI=mongodb+srv://<usuario>:<password>@<cluster>.mongodb.net/reservas_salas_u11?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<usuario>:<password>@<cluster>.mongodb.net/reservas_salas_u12?retryWrites=true&w=majority
 ```
 
-## 3. Modelo de Campos Editables
+## 3. Campos Admitidos por Operación
 
-El reemplazo completo (`POST /reservas/:id/editar` y `PUT /api/reservas/:id`) exige enviar exactamente **7 campos editables**. El identificador (`id`) se toma únicamente desde el parámetro `:id` de la URL y no se admite dentro del cuerpo de la solicitud.
+* **Cambio parcial web (`POST /reservas/:id/estado`):** Admite únicamente el campo `estado` con valor `"pendiente"` o `"confirmada"`. Rechaza con **HTML `400`** cualquier envío vacío, valor fuera de catálogo, campo extra o campo repetido. Los otros 6 campos (`estudiante`, `email`, `sala`, `fecha`, `turno`, `personas`) y el ID permanecen intactos.
+* **Eliminación web (`POST /reservas/:id/eliminar`):** Admite únicamente `confirmar=si` tras leer la pantalla previa de confirmación (`GET /reservas/:id/eliminar`). Rechaza con **HTML `400`** envíos sin confirmar, `confirmar=no`, valores repetidos o campos extra sin alterar el documento.
+* **Edición completa heredada (`POST /reservas/:id/editar` y `PUT /api/reservas/:id`):** Exige los 7 campos editables (`estudiante`, `email`, `sala`, `fecha`, `turno`, `personas` entero entre `1` y `6`, y `estado`).
+* **Diferencia entre `POST` web y `PATCH`/`DELETE` de la API:**
+  * Los formularios HTML (`POST /reservas/:id/estado` y `POST /reservas/:id/eliminar`) reciben `application/x-www-form-urlencoded`, validan el cuerpo en el controlador web, invocan el servicio compartido (`servicio.modificar` / `servicio.eliminar`) sin realizar llamadas HTTP internas y responden con redirección **`303 See Other`** (o renderizan vistas HTML con estado `400`/`404`).
+  * Los endpoints de API (`PATCH /api/reservas/:id` y `DELETE /api/reservas/:id`) operan con JSON y códigos REST (`200 OK` en `PATCH` admitiendo `estado` y `personas`; `204 No Content` sin cuerpo en `DELETE` exitoso; `400`/`404` en JSON ante error).
 
-* **`estudiante`** *(input `text` / `String`)*: Obligatorio; no puede quedar vacío luego de aplicar `.trim()`.
-* **`email`** *(input `email` / `String`)*: Obligatorio; texto limpio que debe incluir `@`.
-* **`sala`** *(select / `String`)*: Obligatoria; solo admite `Sala Norte`, `Sala Sur` o `Sala Multimedia`.
-* **`fecha`** *(input `date` / `String`)*: Obligatoria; texto no vacío en formato de fecha (`YYYY-MM-DD`).
-* **`turno`** *(select / `String`)*: Obligatorio; solo admite `Mañana`, `Tarde` o `Noche`.
-* **`personas`** *(input `number` / `Number`)*: Obligatorio; se comprueba que el texto no llegue vacío antes de convertirlo con `Number`, y debe ser un entero finito entre `1` y `6`.
-* **`estado`** *(select / `String`)*: Obligatorio; solo admite `pendiente` o `confirmada` (al crear una reserva nueva se asigna `pendiente` por defecto).
+## 4. Rutas y Respuestas
 
-**Restricciones de integridad del cuerpo:** Se rechaza con estado `400` cualquier envío al que le falte alguno de los 7 campos, que incluya propiedades extra (`id`, `_id`, campos inventados) o que envíe estructuras no textuales u operadores en el formulario.
-
-**Ejemplo de los 7 campos editables:**
-```json
-{
-  "estudiante": "Ana Ejemplo",
-  "email": "ana@example.com",
-  "sala": "Sala Norte",
-  "fecha": "2026-11-04",
-  "turno": "Mañana",
-  "personas": 3,
-  "estado": "pendiente"
-}
-```
-
-## 4. Rutas de Edición Web, API y Destino de Redirección `303`
-
-### Rutas Web de Edición
-* **`GET /reservas/:id/editar`**: Busca la reserva por `:id` y renderiza `views/reservas/editar.ejs` con los 7 campos precargados.
-  * Si `:id` no cumple el formato de `ObjectId` de MongoDB, responde **HTML `400`**.
-  * Si `:id` tiene formato válido pero no existe en la colección, responde **HTML `404`**.
-* **`POST /reservas/:id/editar`**: Valida los 7 campos recibidos, guarda el contexto en `res.locals` antes de invocar `servicio.reemplazar(id, datosReemplazo)` y persiste el reemplazo completo en MongoDB sin llamar por HTTP a la propia API.
-  * **Destino del `303`:** Ante un guardado exitoso, responde **`303 See Other`** con cabecera `Location: /reservas/:id`, redirigiendo al detalle actualizado de la reserva.
-  * **Conservación ante errores:** Si falla la validación en el controlador o Mongoose rechaza el documento, responde **HTML `400`** renderizando nuevamente `views/reservas/editar.ejs` con el mensaje explicativo, el `id` y todos los valores ingresados por el usuario intactos.
-
-### Endpoints de API y Rutas Heredadas (TP 10)
-* **`PUT /api/reservas/:id`**: Reemplazo completo vía JSON reutilizando `servicio.reemplazar` (`200 OK` con el documento formateado, `400` si faltan o sobran campos, `404` si el ID no existe).
-* **Resto de la API:** `GET /api/reservas` (con filtrado, ordenamiento, paginación y proyección), `GET /api/reservas/:id`, `POST /api/reservas`, `PATCH /api/reservas/:id` y `DELETE /api/reservas/:id`.
-* **Vistas HTML y Monitoreo:** `GET /reservas`, `GET /reservas/nueva`, `POST /reservas`, `GET /reservas/:id` y `GET /estado`.
+### Cambio Parcial de Estado (Web)
+* **`GET /reservas/:id/estado`**
+  * Busca la reserva por `:id` y renderiza `views/reservas/estado.ejs` (`200 OK`) con el estado actual precargado en un `<select>` y un enlace para cancelar hacia `/reservas/:id` sin modificar datos.
+  * Devuelve **HTML `400`** si el `:id` no cumple el formato `ObjectId` y **HTML `404`** si tiene formato válido pero no existe.
+* **`POST /reservas/:id/estado`**
+  * Valida que llegue exclusivamente `estado` (`pendiente` o `confirmada`), guarda el contexto en `res.locals` y ejecuta `servicio.modificar(id, { estado })`.
+  * **Éxito:** Responde **`303 See Other`** con `Location: /reservas/:id`, conservando intactos los 6 campos restantes y el ID.
+  * **Error:** Responde **HTML `400`** volviendo a renderizar `views/reservas/estado.ejs` con explicación, `id` y valores recibidos, o **HTML `404`** si el registro fue eliminado previamente.
 
 ## 5. Pruebas Reproducibles y Evidencia de Resultados
 
-### Datos Iniciales (`reservas_salas_u11`, colección `reservas`)
-1. **Ana Ejemplo** (`ana@example.com` | `Sala Norte` | `2026-11-04` | `Mañana` | 2 personas | `pendiente`) — ID: `6af686a526082caba9ac6388`
-2. **Bruno Ejemplo** (`bruno@example.com` | `Sala Sur` | `2026-11-04` | `Tarde` | 3 personas | `pendiente`) — ID: `6af686d726082caba9ac6389`
+### Datos Iniciales (`reservas_salas_u12`, colección `reservas`)
+1. **Ana Ejemplo** (`ana@example.com` | `Sala Norte` | `2026-11-11` | `Mañana` | 2 personas | `pendiente`) — ID: `6afc6f4636a97a3b8bca255f`
+2. **Bruno Ejemplo** (`bruno@example.com` | `Sala Sur` | `2026-11-11` | `Tarde` | 3 personas | `pendiente`) — ID: `6afcacf56daaad8648e725d7`
+3. **Lucio Temporal** (registro descartable para `DELETE` API) — ID: `6afcad0e6daaad8648e725d8`
 
 ### Matriz de Verificación (Navegador y Postman)
-* **Precarga de edición (`GET /reservas/6af686a526082caba9ac6388/editar`):** Renderiza el formulario con los 7 campos precargados con los valores actuales de Ana Ejemplo.
-* **Guardar desde web y comprobar por API:** Al cambiar `personas` a `4` y `estado` a `confirmada` y enviar el formulario, el servidor responde **`303 See Other`** hacia `/reservas/6af686a526082caba9ac6388`. Al consultar `GET http://localhost:3000/api/reservas/6af686a526082caba9ac6388`, devuelve `200 OK` conservando el mismo ID con `personas: 4` y `estado: "confirmada"`.
-* **Cancelar edición:** Al modificar campos en pantalla dentro de `/reservas/6af686a526082caba9ac6388/editar` y pulsar **Cancelar**, vuelve a `/reservas/6af686a526082caba9ac6388` sin efectuar escrituras.
-* **Guardar desde API (`PUT` completo) y comprobar en web:** Enviando `PUT http://localhost:3000/api/reservas/6af686a526082caba9ac6388` con body JSON completo (`personas: 3`, `estado: "pendiente"`), responde `200 OK` con el mismo ID; al reabrir `/reservas/6af686a526082caba9ac6388/editar`, los 7 campos precargados coinciden con el `PUT`.
-* **`PUT` incompleto (`PUT /api/reservas/6af686a526082caba9ac6388` omitiendo `estado`):** Responde `400 Bad Request` y `GET /api/reservas/6af686a526082caba9ac6388` confirma que el documento permanece intacto.
-* **Formulario inválido (`POST /reservas/6af686a526082caba9ac6388/editar` en `x-www-form-urlencoded`):** Enviando las 7 filas con `estudiante="Ana Prueba Error"` y `personas=0`, responde **HTML `400`** mostrando `editar.ejs` con los valores recibidos conservados y sin alterar el documento en Atlas. Al corregir `personas=2` y reenviar (con *Automatically follow redirects* desactivado en Postman), se observa **`303 See Other`** y cabecera `Location: /reservas/6af686a526082caba9ac6388`.
-* **ID inválido vs. ID válido ausente:** `GET /reservas/123/editar` devuelve **HTML `400`** (*ID inválido*); `GET /reservas/6af686a526082caba9ac6380/editar` devuelve **HTML `404`** (*Reserva no encontrada*).
-* **Persistencia tras reinicio:** Tras detener el servidor (`Ctrl + C`) y volver a iniciarlo contra `reservas_salas_u11`, `GET /api/reservas/6af686a526082caba9ac6388` mantiene el último reemplazo válido guardado y `/estado` conserva `totalReservas: 2` sin duplicados.
+* **Cambio parcial API (`PATCH /api/reservas/6afc6f4636a97a3b8bca255f`):**
+  * Con `{"estado": "confirmada"}` devuelve **`200 OK`** manteniendo el mismo ID y los otros 6 campos intactos.
+  * Con `{}` o `{"estado": "inventado"}` devuelve **`400 Bad Request`** sin modificar el documento.
+* **Cambio parcial web (`POST /reservas/6afc6f4636a97a3b8bca255f/estado`):**
+  * Enviando `estado=pendiente` (`x-www-form-urlencoded`, *Automatically follow redirects* desactivado) responde **`303 See Other`** con cabecera `Location: /reservas/6afc6f4636a97a3b8bca255f`; `GET /api/reservas/6afc6f4636a97a3b8bca255f` confirma el cambio y la conservación de los 6 campos restantes.
+  * Enviando `estado=inventado`, cuerpo vacío, `estado=pendiente` + `personas=5` o `estado` duplicado responde **HTML `400`** conservando el contexto y el documento intacto.
+  * Cancelar en el navegador vuelve al detalle sin guardar cambios.
+* **Confirmación y eliminación web (`Bruno Ejemplo` — `6afcacf56daaad8648e725d7`):**
+  * `GET /reservas/6afcacf56daaad8648e725d7/eliminar` muestra la advertencia y datos de Bruno sin borrarlo (`GET` API sigue devolviendo `200`).
+  * `POST /reservas/6afcacf56daaad8648e725d7/eliminar` con cuerpo vacío, `confirmar=no` o `confirmar=si` + campo extra devuelve **HTML `400`** y mantiene el documento intacto.
+  * `POST /reservas/6afcacf56daaad8648e725d7/eliminar` con únicamente `confirmar=si` responde **`303 See Other`** con `Location: /reservas`. Un `GET` posterior a Bruno devuelve **`404`**, repetir el `POST` de eliminación devuelve **`404`** y Ana sigue existiendo.
+* **Eliminación por API (`Lucio Temporal` — `6afcad0e6daaad8648e725d8`):**
+  * `DELETE http://localhost:3000/api/reservas/6afcad0e6daaad8648e725d8` responde **`204 No Content`** sin cuerpo; repetir la solicitud devuelve **`404 Not Found`**.
+* **IDs inválidos, ausencia concurrente y reinicio:**
+  * `GET /reservas/abc/estado` devuelve **HTML `400`**; un ID válido ausente devuelve **HTML `404`**. Al abrir una pantalla de edición/estado y borrar el registro desde `DELETE /api/...` antes de enviar el formulario, el envío responde **HTML `404`** sin recrear el documento.
+  * Tras reiniciar el servidor (`Ctrl + C` y nuevo arranque contra `reservas_salas_u12`), el estado de Ana persiste, los registros eliminados siguen ausentes y las funciones del TP 11 (edición completa de 7 campos, alta, listado y `PUT`) siguen operativas.
