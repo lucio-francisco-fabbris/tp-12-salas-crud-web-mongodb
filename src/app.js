@@ -1,3 +1,4 @@
+
 const express = require("express");
 const path = require("node:path");
 const expressLayout = require("express-ejs-layouts");
@@ -41,7 +42,9 @@ function crearApp(
   });
 
   app.get("/", (req, res) => {
-    res.redirect("/reservas");
+    res.render("inicio", {
+      title: "Inicio",
+    });
   });
 
   if (
@@ -83,13 +86,13 @@ function crearApp(
     }
 
     if (err.name === "ValidationError" || err.name === "CastError") {
-      if (res.locals.contextoEdicion) {
-        return res.status(400).render("reservas/editar", {
+      if (res.locals.contextoEstado) {
+        return res.status(400).render("reservas/estado", {
           title: "Cambiar Estado",
           titulo: "Cambiar Estado",
-          id: res.locals.contextoEdicion.id,
-          valores: res.locals.contextoEdicion.valores,
-          error: "Error de validación al guardar los cambios de la reserva.",
+          id: res.locals.contextoEstado.id,
+          valores: res.locals.contextoEstado.valores,
+          error: "Error de validación al guardar el estado de la reserva.",
         });
       }
 

@@ -1,16 +1,35 @@
-<section class="contenedor">
-    <h2>Reservas de salas de estudio</h2>
-
-    <p>Este sitio te permite consultar y reservar temporalmente salas de estudio.</p>
-
-    <p>Podes consultar las reservas existentes o crear nuevas reservas.</p>
+<section class="tarjeta">
+    <div class="cabecera-seccion">
+        <div>
+            <h1>Sistema de Reservas de Salas de Estudio</h1>
+                <p class="subtitulo">
+                Administración centralizada de turnos, disponibilidad y estado de reservas.
+                </p>
+        </div>
+    </div>
 
     <p>
-        <a href="/reservas">Ver reservas</a>
+        Desde este panel podés consultar las reservas activas, registrar nuevas solicitudes,
+        actualizar estados rápidamente o modificar datos existentes.
     </p>
 
-    <p>
-        <a href="/reservas/nueva">Crear una nueva reserva</a>
-    </p>
+    <div class="detalle-grid">
+        <div class="detalle-item">
+            <span>Salas disponibles</span>
+            <strong>Sala Norte, Sala Sur y Multimedia</strong>
+        </div>
+    <div class="detalle-item">
+        <span>Turnos habilitados</span>
+        <strong>Mañana, Tarde y Noche</strong>
+    </div>
+        <div class="detalle-item">
+            <span>Capacidad por reserva</span>
+            <strong>De 1 a 6 personas</strong>
+        </div>
+    </div>
 
+    <div class="acciones">
+        <a href="/reservas" class="btn btn-primario">Ver listado de reservas</a>
+        <a href="/reservas/nueva" class="btn btn-secundario">Crear nueva reserva</a>
+    </div>
 </section>
