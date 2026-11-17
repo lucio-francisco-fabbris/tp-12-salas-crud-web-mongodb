@@ -1,0 +1,27 @@
+<h1>Eliminar reserva</h1>
+
+<p><%= seccion %></p>
+
+<p role="alert">
+    <strong>Atención:</strong> Esta acción es permanente y no se puede deshacer.
+</p>
+
+<% if (locals.error) { %>
+    <p role="alert"><%= error %></p>
+<% } %>
+
+<% if (locals.reserva) { %>
+    <p><strong>ID:</strong> <%= reserva.id %></p>
+    <p><strong>Estudiante:</strong> <%= reserva.estudiante %></p>
+    <p><strong>Sala:</strong> <%= reserva.sala %></p>
+    <p><strong>Fecha:</strong> <%= reserva.fecha %></p>
+    <p><strong>Turno:</strong> <%= reserva.turno %></p>
+<% } else { %>
+    <p><strong>ID:</strong> <%= id %></p>
+<% } %>
+
+<form action="/reservas/<%= id %>/eliminar" method="POST">
+    <input type="hidden" name="confirmar" value="si" />
+    <button type="submit">Confirmar eliminación</button>
+    <a href="/reservas/<%= id %>">Cancelar</a>
+</form>

@@ -1,0 +1,29 @@
+<section class="contenedor">
+    <h2><%= seccion %></h2>
+
+    <p>Estas son las reservas registradas actualmente.</p>
+
+    <a href="/reservas/nueva">Nueva reserva</a>
+
+    <% if (reservas.length === 0) { %>
+        <p>No hay reservas registradas.</p>
+
+    <% } else { %>
+        <ul>
+        <% reservas.forEach((reserva) => { %>
+        <li>
+            <strong><%= reserva.estudiante %></strong>
+            - <%= reserva.sala %>
+            - <%= reserva.fecha %>
+            - <%= reserva.turno %>
+            (<%= reserva.estado %>)
+            <a href="/reservas/<%= reserva.id %>">Ver detalle</a>
+            <a href="/reservas/<%= reserva.id %>/editar">Editar</a>
+            <a href="/reservas/<%= reserva.id %>/estado">Cambiar estado</a>
+            <a href="/reservas/<%= reserva.id %>/eliminar">Eliminar</a>
+        </li>
+        <% }) %>
+    </ul>
+
+    <% } %>
+</section>

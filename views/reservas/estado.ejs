@@ -1,0 +1,28 @@
+<h1>Cambiar estado de reserva</h1>
+
+<p><%= seccion %></p>
+
+<% if (locals.reserva) { %>
+    <p>
+        <strong>Reserva:</strong> <%= reserva.estudiante %> — <%= reserva.sala %>
+        (<%= reserva.fecha %>, <%= reserva.turno %>)
+    </p>
+<% } %>
+
+<p><strong>ID:</strong> <%= id %></p>
+
+<% if (error) { %>
+    <p role="alert"><%= error %></p>
+<% } %>
+
+<form action="/reservas/<%= id %>/estado" method="POST">
+    <label for="estado">Estado</label>
+        <select id="estado" name="estado">
+            <option value="">Seleccioná un estado</option>
+            <option value="pendiente" <%= valores?.estado === "pendiente" ? "selected" : "" %>>pendiente</option>
+            <option value="confirmada" <%= valores?.estado === "confirmada" ? "selected" : "" %>>confirmada</option>
+        </select>
+
+    <button type="submit">Actualizar estado</button>
+    <a href="/reservas/<%= id %>">Cancelar</a>
+</form>
